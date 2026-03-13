@@ -1,0 +1,10 @@
+const router = require('express').Router();
+const auth = require('../middlewares/auth');
+const c = require('../controllers/ventasCreditoController');
+router.use(auth);
+router.get('/', c.getAll);
+router.get('/cartera', c.resumenCartera);
+router.get('/:id', c.getOne);
+router.post('/', c.create);
+router.post('/:id/abonos', c.agregarAbono);
+module.exports = router;

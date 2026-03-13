@@ -1,0 +1,11 @@
+const router = require('express').Router();
+const auth = require('../middlewares/auth');
+const c = require('../controllers/pedidosController');
+router.use(auth);
+router.get('/', c.getAll);
+router.get('/:id', c.getOne);
+router.post('/', c.create);
+router.put('/:id', c.update);
+router.patch('/:id/estado', c.actualizarEstado);
+router.delete('/:id', c.delete);
+module.exports = router;

@@ -1,0 +1,12 @@
+const router = require('express').Router();
+const auth = require('../middlewares/auth');
+const c = require('../controllers/pedidosClienteController');
+router.use(auth);
+router.get('/', c.getAll);
+router.get('/cartera', c.resumenCartera);
+router.get('/:id', c.getOne);
+router.post('/', c.create);
+router.patch('/:id/estado', c.actualizarEstado);
+router.post('/:id/abonos', c.agregarAbono);
+router.delete('/:id', c.delete);
+module.exports = router;

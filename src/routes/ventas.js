@@ -1,0 +1,9 @@
+const router = require('express').Router();
+const auth = require('../middlewares/auth');
+const c = require('../controllers/ventasController');
+router.use(auth);
+router.get('/', c.getAll);
+router.get('/:id', c.getOne);
+router.post('/', c.create);
+router.put('/:id', c.update);
+module.exports = router;

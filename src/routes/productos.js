@@ -1,0 +1,12 @@
+const router = require('express').Router();
+const auth = require('../middlewares/auth');
+const c = require('../controllers/productosController');
+router.use(auth);
+router.get('/', c.getAll);
+router.get('/buscar', c.buscar);
+router.get('/:id', c.getOne);
+router.post('/', c.create);
+router.put('/:id', c.update);
+router.delete('/:id', c.delete);
+router.patch('/:id/stock', c.ajustarStock);
+module.exports = router;
