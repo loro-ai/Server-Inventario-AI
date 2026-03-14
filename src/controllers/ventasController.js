@@ -10,9 +10,7 @@ exports.getAll = async (req, res) => {
       if (desde) filtro.fecha.$gte = new Date(desde);
       if (hasta) filtro.fecha.$lte = new Date(hasta);
     }
-    const ventas = await Venta.find(filtro)
-      .sort({ fecha: -1 })
-      .populate('producto', 'nombre categoria');
+    const ventas = await Venta.find(filtro).sort({ fecha: -1 });
     res.json(ventas);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -21,8 +19,7 @@ exports.getAll = async (req, res) => {
 
 exports.getOne = async (req, res) => {
   try {
-    const venta = await Venta.findOne({ _id: req.params.id, usuario: req.auth.id })
-      .populate('producto', 'nombre categoria');
+    const venta = await Venta.findOne({ _id: req.params.id, usuario: req.auth.id });
     if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
     res.json(venta);
   } catch (err) {
@@ -30,61 +27,95 @@ exports.getOne = async (req, res) => {
   }
 };
 
+// Crear venta — soporta items[] (múltiples productos) o nombreProducto (legacy n8n)
 exports.create = async (req, res) => {
   try {
-    const { productoId, cantidadVendida, cantidad, nota, precioVenta, precioCompra, nombreProducto, _usuarioId } = req.body;
-    const cantidadFinal = cantidadVendida || cantidad || 1;
+    const { items, cliente, nota, nombreProducto, cantidad, cantidadVendida, _usuarioId } = req.body;
     const usuarioId = req.auth?.id || _usuarioId;
 
-    let prodDoc = null;
-    let finalNombre = nombreProducto;
-    let finalPrecioVenta = precioVenta;
-    let finalPrecioCompra = precioCompra || 0;
+    let itemsFinales = [];
 
-    if (productoId) {
-      prodDoc = await Producto.findOne({ _id: productoId, usuario: usuarioId });
-      if (!prodDoc) return res.status(404).json({ error: 'Producto no encontrado' });
-    } else if (nombreProducto) {
-      // Buscar por nombre (viene de n8n sin productoId)
-      prodDoc = await Producto.findOne({
-        usuario: usuarioId,
-        activo: true,
-        nombre: { $regex: new RegExp(nombreProducto.trim(), 'i') }
-      });
-      if (!prodDoc) {
-        return res.status(404).json({ error: `No encontré "${nombreProducto}" en el inventario. Verifica el nombre del producto.` });
+    // Modo nuevo: array de items
+    if (items && items.length > 0) {
+      for (const item of items) {
+        const cantItem = item.cantidad || item.cantidadVendida || 1;
+        let prodDoc = null;
+
+        if (item.productoId) {
+          prodDoc = await Producto.findOne({ _id: item.productoId, usuario: usuarioId, activo: true });
+          if (!prodDoc) return res.status(404).json({ error: `Producto ${item.productoId} no encontrado` });
+        } else if (item.nombreProducto) {
+          prodDoc = await Producto.findOne({
+            usuario: usuarioId, activo: true,
+            nombre: { $regex: new RegExp(item.nombreProducto.trim(), 'i') }
+          });
+          if (!prodDoc) return res.status(404).json({ error: `No encontré "${item.nombreProducto}" en el inventario` });
+        } else {
+          return res.status(400).json({ error: 'Cada item debe tener productoId o nombreProducto' });
+        }
+
+        if (prodDoc.cantidad < cantItem)
+          return res.status(400).json({ error: `Solo hay ${prodDoc.cantidad} unidades de ${prodDoc.nombre}` });
+
+        prodDoc.cantidad -= cantItem;
+        await prodDoc.save();
+
+        itemsFinales.push({
+          producto: prodDoc._id,
+          nombreProducto: prodDoc.nombre,
+          cantidadVendida: cantItem,
+          precioVenta: prodDoc.precioVenta,
+          precioCompra: prodDoc.precioCompra
+        });
       }
     }
-
-    if (prodDoc) {
-      if (prodDoc.cantidad < cantidadFinal)
+    // Modo legacy: nombreProducto simple (n8n)
+    else if (nombreProducto) {
+      const cantFinal = cantidadVendida || cantidad || 1;
+      const prodDoc = await Producto.findOne({
+        usuario: usuarioId, activo: true,
+        nombre: { $regex: new RegExp(nombreProducto.trim(), 'i') }
+      });
+      if (!prodDoc) return res.status(404).json({ error: `No encontré "${nombreProducto}" en el inventario` });
+      if (prodDoc.cantidad < cantFinal)
         return res.status(400).json({ error: `Solo hay ${prodDoc.cantidad} unidades de ${prodDoc.nombre}` });
-      // Siempre tomar nombre y precios desde la BD — ignorar lo que venga en el body
-      finalNombre = prodDoc.nombre;
-      finalPrecioVenta = prodDoc.precioVenta;
-      finalPrecioCompra = prodDoc.precioCompra;
-    }
 
-    if (!finalNombre) return res.status(400).json({ error: 'Nombre del producto requerido' });
-    if (!finalPrecioVenta) return res.status(400).json({ error: `No se encontró el precio de "${finalNombre}" en el inventario. Verifica que el producto exista.` });
+      prodDoc.cantidad -= cantFinal;
+      await prodDoc.save();
+
+      itemsFinales.push({
+        producto: prodDoc._id,
+        nombreProducto: prodDoc.nombre,
+        cantidadVendida: cantFinal,
+        precioVenta: prodDoc.precioVenta,
+        precioCompra: prodDoc.precioCompra
+      });
+    } else {
+      return res.status(400).json({ error: 'Se requiere items[] o nombreProducto' });
+    }
 
     const venta = new Venta({
       usuario: usuarioId,
-      producto: prodDoc?._id || undefined,
-      nombreProducto: finalNombre,
-      cantidadVendida: cantidadFinal,
-      precioVenta: finalPrecioVenta || 0,
-      precioCompra: finalPrecioCompra,
-      nota
+      cliente: cliente || undefined,
+      items: itemsFinales,
+      nota: nota || undefined
     });
     await venta.save();
-
-    if (prodDoc) {
-      prodDoc.cantidad -= cantidadFinal;
-      await prodDoc.save();
-    }
-
     res.status(201).json(venta);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+exports.update = async (req, res) => {
+  try {
+    const venta = await Venta.findOne({ _id: req.params.id, usuario: req.auth.id });
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+    const { nota, cliente } = req.body;
+    if (nota !== undefined) venta.nota = nota;
+    if (cliente !== undefined) venta.cliente = cliente;
+    await venta.save();
+    res.json(venta);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -98,20 +129,5 @@ exports.remove = async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
-  }
-};
-
-exports.update = async (req, res) => {
-  try {
-    const venta = await Venta.findOne({ _id: req.params.id, usuario: req.auth.id });
-    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
-    const { nota, precioVenta, precioCompra } = req.body;
-    if (nota !== undefined) venta.nota = nota;
-    if (precioVenta !== undefined) venta.precioVenta = precioVenta;
-    if (precioCompra !== undefined) venta.precioCompra = precioCompra;
-    await venta.save();
-    res.json(venta);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
   }
 };
