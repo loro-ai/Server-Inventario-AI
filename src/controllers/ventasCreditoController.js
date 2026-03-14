@@ -100,22 +100,22 @@ async function _verificarProductosCubiertos(creditoDoc, usuarioId) {
   const ventasCreadas = [];
   let pagadoDisponible = creditoDoc.totalPagado;
 
-  // Iterar items en orden, cubrir unidades completas con el abono disponible
   for (const item of creditoDoc.items) {
     const precioItem = item.precioUnitario;
     let unidadesCubiertas = Math.floor(pagadoDisponible / precioItem);
     unidadesCubiertas = Math.min(unidadesCubiertas, item.cantidad);
 
     if (unidadesCubiertas > 0) {
-      // Verificar que no se haya creado ya una venta para estas unidades
-      const ventaExistente = await Venta.findOne({
+      // Sumar todas las unidades ya registradas para este producto en este crédito
+      const ventasExistentes = await Venta.find({
         ventaCreditoOrigen: creditoDoc._id,
         'items.producto': item.producto,
       });
 
-      const unidadesYaRegistradas = ventaExistente
-        ? ventaExistente.items.find(i => String(i.producto) === String(item.producto))?.cantidadVendida || 0
-        : 0;
+      const unidadesYaRegistradas = ventasExistentes.reduce((sum, v) => {
+        const itemMatch = v.items.find(i => String(i.producto) === String(item.producto));
+        return sum + (itemMatch?.cantidadVendida || 0);
+      }, 0);
 
       const unidadesNuevas = unidadesCubiertas - unidadesYaRegistradas;
 
@@ -170,6 +170,30 @@ exports.agregarAbono = async (req, res) => {
     });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+};
+
+exports.update = async (req, res) => {
+  try {
+    const credito = await VentaCredito.findOne({ _id: req.params.id, usuario: req.auth.id });
+    if (!credito) return res.status(404).json({ error: 'Deuda no encontrada' });
+    const { notas } = req.body;
+    if (notas !== undefined) credito.notas = notas;
+    await credito.save();
+    res.json(credito);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+};
+
+exports.remove = async (req, res) => {
+  try {
+    const credito = await VentaCredito.findOne({ _id: req.params.id, usuario: req.auth.id });
+    if (!credito) return res.status(404).json({ error: 'Deuda no encontrada' });
+    await credito.deleteOne();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 };
 

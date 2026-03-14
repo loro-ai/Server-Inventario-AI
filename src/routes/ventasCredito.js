@@ -7,4 +7,6 @@ router.get('/cartera', c.resumenCartera);
 router.get('/:id', c.getOne);
 router.post('/', c.create);
 router.post('/:id/abonos', c.agregarAbono);
+router.put('/:id', c.update);
+router.delete('/:id', c.remove);
 module.exports = router;
