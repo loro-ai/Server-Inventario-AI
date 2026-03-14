@@ -61,8 +61,8 @@ exports.enviar = async (req, res) => {
     // Contexto del negocio en tiempo real
     const contexto = await getContexto(req.auth.id);
 
-    // Extraer token JWT del header Authorization
-    const token = req.headers.authorization?.replace('Bearer ', '') || '';
+    // Token interno para n8n — NUNCA pasar el JWT del usuario
+    const tokenInterno = process.env.N8N_INTERNAL_TOKEN || '';
 
     let respuestaFinal = '';
     let accionRealizada = false;
@@ -79,7 +79,7 @@ exports.enviar = async (req, res) => {
             contenido: m.contenido,
           })),
           contexto,
-          token, // JWT para que n8n pueda autenticarse contra la API
+          token: tokenInterno,
         }),
         signal: AbortSignal.timeout(30000),
       });

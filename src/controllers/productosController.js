@@ -1,5 +1,10 @@
 const Producto = require('../models/Producto');
 
+// Escapa caracteres especiales de regex para evitar ReDoS
+function escaparRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 exports.getAll = async (req, res) => {
   try {
     const { categoria, talla, stockBajo, busqueda } = req.query;
@@ -8,17 +13,18 @@ exports.getAll = async (req, res) => {
     if (talla) filtro.talla = talla;
     if (stockBajo === 'true') filtro.cantidad = { $lte: 3 };
     if (busqueda) {
+      const b = escaparRegex(busqueda.slice(0, 100)); // max 100 chars
       filtro.$or = [
-        { nombre: { $regex: busqueda, $options: 'i' } },
-        { color: { $regex: busqueda, $options: 'i' } },
-        { talla: { $regex: busqueda, $options: 'i' } },
-        { categoria: { $regex: busqueda, $options: 'i' } }
+        { nombre: { $regex: b, $options: 'i' } },
+        { color: { $regex: b, $options: 'i' } },
+        { talla: { $regex: b, $options: 'i' } },
+        { categoria: { $regex: b, $options: 'i' } }
       ];
     }
     const productos = await Producto.find(filtro).sort({ createdAt: -1 });
     res.json(productos);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Error cargando productos' });
   }
 };
 
@@ -70,19 +76,20 @@ exports.buscar = async (req, res) => {
   try {
     const { q } = req.query;
     if (!q) return res.json([]);
+    const b = escaparRegex(q.slice(0, 100)); // max 100 chars
     const productos = await Producto.find({
       activo: true,
       usuario: req.auth.id,
       $or: [
-        { nombre: { $regex: q, $options: 'i' } },
-        { categoria: { $regex: q, $options: 'i' } },
-        { color: { $regex: q, $options: 'i' } },
-        { talla: { $regex: q, $options: 'i' } }
+        { nombre: { $regex: b, $options: 'i' } },
+        { categoria: { $regex: b, $options: 'i' } },
+        { color: { $regex: b, $options: 'i' } },
+        { talla: { $regex: b, $options: 'i' } }
       ]
     });
     res.json(productos);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Error en búsqueda' });
   }
 };
 
