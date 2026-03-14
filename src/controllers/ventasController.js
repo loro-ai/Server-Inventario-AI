@@ -44,25 +44,29 @@ exports.create = async (req, res) => {
     if (productoId) {
       prodDoc = await Producto.findOne({ _id: productoId, usuario: usuarioId });
       if (!prodDoc) return res.status(404).json({ error: 'Producto no encontrado' });
-    }  else if (nombreProducto) {
-  prodDoc = await Producto.findOne({
-    usuario: usuarioId,
-    activo: true,
-    nombre: { $regex: new RegExp(nombreProducto.trim(), 'i') }
-  });
-  if (!prodDoc) {
-    return res.status(404).json({ error: `No encontré "${nombreProducto}" en el inventario. Verifica el nombre del producto.` });
-  }
-}
+    } else if (nombreProducto) {
+      // Buscar por nombre (viene de n8n sin productoId)
+      prodDoc = await Producto.findOne({
+        usuario: usuarioId,
+        activo: true,
+        nombre: { $regex: new RegExp(nombreProducto.trim(), 'i') }
+      });
+      if (!prodDoc) {
+        return res.status(404).json({ error: `No encontré "${nombreProducto}" en el inventario. Verifica el nombre del producto.` });
+      }
+    }
+
     if (prodDoc) {
       if (prodDoc.cantidad < cantidadFinal)
         return res.status(400).json({ error: `Solo hay ${prodDoc.cantidad} unidades de ${prodDoc.nombre}` });
+      // Siempre tomar nombre y precios desde la BD — ignorar lo que venga en el body
       finalNombre = prodDoc.nombre;
       finalPrecioVenta = prodDoc.precioVenta;
       finalPrecioCompra = prodDoc.precioCompra;
     }
 
     if (!finalNombre) return res.status(400).json({ error: 'Nombre del producto requerido' });
+    if (!finalPrecioVenta) return res.status(400).json({ error: `No se encontró el precio de "${finalNombre}" en el inventario. Verifica que el producto exista.` });
 
     const venta = new Venta({
       usuario: usuarioId,
