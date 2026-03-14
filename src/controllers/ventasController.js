@@ -86,6 +86,17 @@ exports.create = async (req, res) => {
   }
 };
 
+exports.remove = async (req, res) => {
+  try {
+    const venta = await Venta.findOne({ _id: req.params.id, usuario: req.auth.id });
+    if (!venta) return res.status(404).json({ error: 'Venta no encontrada' });
+    await venta.deleteOne();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 exports.update = async (req, res) => {
   try {
     const venta = await Venta.findOne({ _id: req.params.id, usuario: req.auth.id });
