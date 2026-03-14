@@ -4,10 +4,10 @@ const productoSchema = new mongoose.Schema({
   usuario: { type: mongoose.Schema.Types.ObjectId, ref: 'Usuario', required: true },
   nombre: { type: String, required: true, trim: true },
   categoria: {
-    type: String,
-    enum: ['blusa', 'vestido', 'pantalon', 'falda', 'conjunto', 'accesorio', 'otro'],
-    default: 'otro'
-  },
+  type: String,
+  enum: ['blusa', 'vestido', 'pantalon', 'falda', 'conjunto', 'accesorio', 'ropa_interior', 'maquillaje', 'bermuda', 'camiseta', 'comida', 'otro'],
+  default: 'otro'
+},
   talla: { type: String, trim: true },
   color: { type: String, trim: true },
   cantidad: { type: Number, required: true, min: 0, default: 0 },
