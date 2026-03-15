@@ -108,3 +108,61 @@ exports.ajustarStock = async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 };
+
+exports.historial = async (req, res) => {
+  try {
+    const Venta = require('../models/Venta');
+    const VentaCredito = require('../models/VentaCredito');
+
+    const producto = await Producto.findOne({ _id: req.params.id, usuario: req.auth.id });
+    if (!producto) return res.status(404).json({ error: 'Producto no encontrado' });
+
+    // Ventas de contado donde aparece este producto
+    const ventas = await Venta.find({
+      usuario: req.auth.id,
+      'items.producto': producto._id
+    }).sort({ fecha: -1 }).limit(20).lean();
+
+    // Créditos donde aparece este producto
+    const creditos = await VentaCredito.find({
+      usuario: req.auth.id,
+      'items.productoId': producto._id
+    }).sort({ createdAt: -1 }).limit(20).lean();
+
+    // Formatear ventas
+    const ventasFormateadas = ventas.map(v => {
+      const item = v.items?.find(i => String(i.producto) === String(producto._id));
+      return {
+        tipo: 'venta',
+        fecha: v.fecha,
+        cliente: v.cliente || null,
+        cantidad: item?.cantidadVendida || 0,
+        total: item ? item.cantidadVendida * item.precioVenta : 0,
+        nota: v.nota || null,
+        ventaCreditoOrigen: v.ventaCreditoOrigen || null,
+      };
+    });
+
+    // Formatear créditos
+    const creditosFormateados = creditos.map(c => {
+      const item = c.items?.find(i => String(i.productoId) === String(producto._id));
+      return {
+        tipo: 'credito',
+        fecha: c.createdAt,
+        cliente: c.cliente?.nombre || null,
+        cantidad: item?.cantidad || 0,
+        total: item ? item.cantidad * item.precioUnitario : 0,
+        saldoPendiente: c.saldoPendiente,
+        estado: c.estado,
+      };
+    });
+
+    // Unir y ordenar por fecha
+    const historial = [...ventasFormateadas, ...creditosFormateados]
+      .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+    res.json({ producto, historial });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};

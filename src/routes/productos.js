@@ -4,6 +4,7 @@ const c = require('../controllers/productosController');
 router.use(auth);
 router.get('/', c.getAll);
 router.get('/buscar', c.buscar);
+router.get('/:id/historial', c.historial);
 router.get('/:id', c.getOne);
 router.post('/', c.create);
 router.put('/:id', c.update);

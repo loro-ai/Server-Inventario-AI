@@ -5,18 +5,21 @@ const VentaCredito = require('../models/VentaCredito');
 
 exports.resumen = async (req, res) => {
   try {
-    // FIX CRÍTICO: usar ObjectId real, no $toString
     const uid = new mongoose.Types.ObjectId(req.auth.id);
     const ahora = new Date();
     const inicioMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
     const inicioSemana = new Date(ahora);
     inicioSemana.setDate(ahora.getDate() - 7);
 
-    const [totalProductos, stockBajo, ventasMesAgg, ventasSemanaAgg, topProductos] =
+    const [totalProductos, totalAgotados, stockBajo, ventasMesAgg, ventasSemanaAgg, topProductos] =
       await Promise.all([
-        Producto.countDocuments({ activo: true, usuario: uid }),
+        // Solo productos con stock > 0
+        Producto.countDocuments({ activo: true, usuario: uid, cantidad: { $gt: 0 } }),
 
-        Producto.find({ activo: true, usuario: uid, cantidad: { $lte: 3 } })
+        // Productos agotados
+        Producto.countDocuments({ activo: true, usuario: uid, cantidad: 0 }),
+
+        Producto.find({ activo: true, usuario: uid, cantidad: { $gt: 0, $lte: 3 } })
           .select('nombre cantidad talla categoria'),
 
         Venta.aggregate([
@@ -55,7 +58,6 @@ exports.resumen = async (req, res) => {
         ])
       ]);
 
-    // Total deuda créditos pendientes
     const creditos = await VentaCredito.find({
       usuario: uid,
       estado: { $in: ['pendiente', 'abonado'] }
@@ -64,6 +66,7 @@ exports.resumen = async (req, res) => {
 
     res.json({
       totalProductos,
+      totalAgotados,
       stockBajo,
       gananciaMes: ventasMesAgg[0]?.totalUtilidad || 0,
       totalVentasMes: ventasMesAgg[0]?.totalVentas || 0,
