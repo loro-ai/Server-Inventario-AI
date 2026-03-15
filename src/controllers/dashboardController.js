@@ -61,8 +61,12 @@ exports.resumen = async (req, res) => {
     const creditos = await VentaCredito.find({
       usuario: uid,
       estado: { $in: ['pendiente', 'abonado'] }
-    }).select('totalVenta totalPagado');
-    const totalDeuda = creditos.reduce((sum, vc) => sum + vc.saldoPendiente, 0);
+    }).select('totalVenta totalPagado saldoPendiente');
+    const totalDeuda = creditos.reduce((sum, vc) => {
+      // saldoPendiente puede no estar guardado en documentos viejos — calcularlo como fallback
+      const saldo = vc.saldoPendiente ?? Math.max(0, vc.totalVenta - vc.totalPagado);
+      return sum + saldo;
+    }, 0);
 
     res.json({
       totalProductos,
